@@ -1,56 +1,46 @@
 package org.openremote.agent.protocol.strijp;
 
-import io.netty.channel.ChannelHandler;
-import org.openremote.agent.protocol.Protocol;
-import org.openremote.agent.protocol.io.AbstractIoClientProtocol;
-import org.openremote.agent.protocol.udp.UdpClientProtocol;
-import org.openremote.agent.protocol.udp.UdpIoClient;
+import org.openremote.agent.protocol.AbstractProtocol;
+import org.openremote.model.asset.Asset;
 import org.openremote.model.asset.AssetAttribute;
+import org.openremote.model.asset.agent.ConnectionStatus;
 import org.openremote.model.attribute.AttributeEvent;
 import org.openremote.model.attribute.AttributeRef;
 import org.openremote.model.attribute.MetaItem;
 import org.openremote.model.attribute.MetaItemDescriptor;
 import org.openremote.model.syslog.SyslogCategory;
-import org.openremote.model.util.Pair;
 import org.openremote.model.value.Value;
+import org.openremote.model.value.Values;
 
-import static org.openremote.container.util.Util.joinCollections;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.logging.Logger;
+
 import static org.openremote.model.Constants.PROTOCOL_NAMESPACE;
 import static org.openremote.model.syslog.SyslogCategory.PROTOCOL;
 
-import java.util.*;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
+public class StrijpProtocol extends AbstractProtocol {
 
-public class StrijpProtocol extends AbstractStrijpProtocol<String> {
-    private static final Logger LOG = SyslogCategory.getLogger(PROTOCOL, UdpClientProtocol.class);
+    private static final Logger LOG = SyslogCategory.getLogger(PROTOCOL, StrijpProtocol.class);
     public static final String PROTOCOL_NAME = PROTOCOL_NAMESPACE + ":strijpClient";
     public static final String PROTOCOL_DISPLAY_NAME = "Strijp Client";
     public static final String PROTOCOL_VERSION = "0.1";
 
-    public static final List<MetaItemDescriptor> PROTOCOL_META_ITEM_DESCRIPTORS = joinCollections(AbstractStrijpProtocol.PROTOCOL_META_ITEM_DESCRIPTORS, AbstractIoClientProtocol.PROTOCOL_GENERIC_META_ITEM_DESCRIPTORS);
+    private String host;
+    private Integer port;
+
+    public static final List<MetaItemDescriptor> PROTOCOL_META_ITEM_DESCRIPTORS = Arrays.asList(
+            META_PROTOCOL_HOST,
+            META_PROTOCOL_PORT
+    );
 
     public static final List<MetaItemDescriptor> ATTRIBUTE_META_ITEM_DESCRIPTORS = Arrays.asList(
             META_ATTRIBUTE_MATCH_FILTERS,
             META_ATTRIBUTE_MATCH_PREDICATE);
-
-    protected final Map<AttributeRef, List<Pair<AttributeRef, Consumer<String>>>> protocolMessageConsumers = new HashMap<>();
-
-    @Override
-    public String getProtocolName() {
-        return PROTOCOL_NAME;
-    }
-
-    @Override
-    public String getProtocolDisplayName() {
-        return PROTOCOL_DISPLAY_NAME;
-    }
-
-    @Override
-    public String getVersion() {
-        return PROTOCOL_VERSION;
-    }
 
     @Override
     protected List<MetaItemDescriptor> getProtocolConfigurationMetaItemDescriptors() {
@@ -72,69 +62,84 @@ public class StrijpProtocol extends AbstractStrijpProtocol<String> {
     }
 
     @Override
-    protected Supplier<ChannelHandler[]> getEncoderDecoderProvider(UdpIoClient<String> client, AssetAttribute protocolConfiguration) {
-        return getGenericStringEncodersAndDecoders(client, protocolConfiguration);
+    protected void doLinkProtocolConfiguration(Asset agent, AssetAttribute protocolConfiguration) {
+        host = Values.getMetaItemValueOrThrow(
+                protocolConfiguration,
+                META_PROTOCOL_HOST,
+                false,
+                false
+        ).flatMap(Values::getString).orElse(null);
+
+        port = Values.getMetaItemValueOrThrow(
+                protocolConfiguration,
+                META_PROTOCOL_PORT,
+                false,
+                false
+        ).flatMap(Values::getIntegerCoerced).orElse(null);
+
+        if (port != null && (port < 1 || port > 65536)) {
+            throw new IllegalArgumentException("Port must be in the range 1-65536");
+        }
+
+        final AttributeRef protocolRef = protocolConfiguration.getReferenceOrThrow();
+        updateStatus(protocolRef, ConnectionStatus.CONNECTED);
     }
 
     @Override
-    protected void onMessageReceived(AttributeRef protocolRef, String message) {
-        List<Pair<AttributeRef, Consumer<String>>> consumers;
-
-        synchronized (protocolMessageConsumers) {
-            consumers = protocolMessageConsumers.get(protocolRef);
-
-            if (consumers != null) {
-                consumers.forEach(c -> {
-                    if (c.value != null) {
-                        c.value.accept(message);
-                    }
-                });
-            }
-        }
-    }
-
-    @Override
-    protected String createWriteMessage(AssetAttribute protocolConfiguration, AssetAttribute attribute, AttributeEvent event, Value processedValue) {
-        LOG.info("RIES 1.3 - " + processedValue.toJson());
-        if (attribute.isReadOnly()) {
-            LOG.fine("Attempt to write to an attribute that doesn't support writes: " + event.getAttributeRef());
-            return null;
-        }
-
-        return processedValue != null ? processedValue.toString() : null;
+    protected void doUnlinkProtocolConfiguration(Asset agent, AssetAttribute protocolConfiguration) {
+        // Called when edit/remove Protocol Agent
     }
 
     @Override
     protected void doLinkAttribute(AssetAttribute attribute, AssetAttribute protocolConfiguration) throws Exception {
-        AttributeRef protocolRef = protocolConfiguration.getReferenceOrThrow();
-        Consumer<String> messageConsumer = Protocol.createGenericAttributeMessageConsumer(attribute, assetService, this::updateLinkedAttribute);
-
-        if (messageConsumer != null) {
-            synchronized (protocolMessageConsumers) {
-                protocolMessageConsumers.compute(protocolRef, (ref, consumers) -> {
-                    if (consumers == null) {
-                        consumers = new ArrayList<>();
-                    }
-                    consumers.add(new Pair<>(
-                            attribute.getReferenceOrThrow(),
-                            messageConsumer
-                    ));
-                    return consumers;
-                });
-            }
-        }
+        // Called when attribute link is created
     }
 
     @Override
     protected void doUnlinkAttribute(AssetAttribute attribute, AssetAttribute protocolConfiguration) {
-        AttributeRef attributeRef = attribute.getReferenceOrThrow();
-        synchronized (protocolMessageConsumers) {
-            protocolMessageConsumers.compute(protocolConfiguration.getReferenceOrThrow(), (ref, consumers) -> {
-                if (consumers != null) {
-                    consumers.removeIf((attrRefConsumer) -> attrRefConsumer.key.equals(attributeRef));
-                }
-                return consumers;
-            });
+        // Called when attribute link is updated/removed
+    }
+
+    @Override
+    protected void processLinkedAttributeWrite(AttributeEvent event, Value processedValue, AssetAttribute protocolConfiguration) {
+        try {
+            DatagramSocket ds = new DatagramSocket();
+            InetAddress ip = InetAddress.getByName(host);
+
+            // processedValue format is [0,0,0,0,0] - R G B A W
+            // Remove angle-brackets
+            String stringArr = processedValue.toString().substring(1, processedValue.toString().length()-1);
+            // Build int array
+            int[] buf = Arrays.stream(stringArr.split(",")).map(String::trim).mapToInt(Integer::parseInt).toArray();
+
+            DatagramPacket DpSend = new DatagramPacket(int_to_unsigned_byte_array(buf), buf.length, ip, port);
+            ds.send(DpSend);
+        } catch (Exception e) {}
+    }
+
+    private static byte[] int_to_unsigned_byte_array(int[] byte_array)
+    {
+        byte[] buf = {0, 0, 0, 0, 0};
+
+        for (int i = 0; i < byte_array.length; i++) {
+            buf[i] = (byte) byte_array[i];
         }
+
+        return buf;
+    }
+
+    @Override
+    public String getProtocolName() {
+        return PROTOCOL_NAME;
+    }
+
+    @Override
+    public String getProtocolDisplayName() {
+        return PROTOCOL_DISPLAY_NAME;
+    }
+
+    @Override
+    public String getVersion() {
+        return PROTOCOL_VERSION;
     }
 }
