@@ -104,16 +104,38 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
 
     @Override
     protected void doLinkAttribute(AssetAttribute attribute, AssetAttribute protocolConfiguration) throws Exception {
-        // Called when attribute link is created
+        String assetId = attribute.getAssetId().orElse(null);
+        if (assetId != null) {
+            Asset asset = assetService.findAsset(assetId);
+            AssetAttribute hostAttribute =  asset.getAttribute("Host").orElse(null);
+            AssetAttribute portAttribute =  asset.getAttribute("Port").orElse(null);
+            if (hostAttribute != null && portAttribute != null) {
+                String hostValue = hostAttribute.getValueAsString().orElse(null);
+                Integer portValue = portAttribute.getValueAsInteger().orElse(null);
+                if (hostValue != null && portValue != null) {
+                    StrijpLight light = new StrijpLight(assetId, hostValue, portValue);
+                    strijpLightMemory.add(light);
+                }
+            }
+        }
     }
 
     @Override
     protected void doUnlinkAttribute(AssetAttribute attribute, AssetAttribute protocolConfiguration) {
-        // Called when attribute link is updated/removed
+        String assetId = attribute.getAssetId().orElse(null);
+        if (assetId != null) {
+            StrijpLight lightToDelete = strijpLightMemory.stream().filter(l -> l.getAssetId().equals(assetId)).findFirst().orElse(null);
+            if (lightToDelete != null) {
+                strijpLightMemory.remove(lightToDelete);
+            }
+        }
     }
 
     @Override
     protected void processLinkedAttributeWrite(AttributeEvent event, Value processedValue, AssetAttribute protocolConfiguration) {
+        for (StrijpLight light : strijpLightMemory) {
+            LOG.info("LIGHT - " + light.getAssetId() + " - " + light.getHost() + " - " + light.getPort());
+        }
         try {
             DatagramSocket ds = new DatagramSocket();
             InetAddress ip = InetAddress.getByName(host);
@@ -167,7 +189,6 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
             throw new IllegalStateException("The import-file format should be .json.");
         try{
             List<StrijpLight> newLights = parseStrijpLightsFromImport(new ObjectMapper().readTree(jsonString));
-            syncLightsToMemory(newLights);
             return syncLightsToAssets(newLights, protocolConfiguration);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("The provided json is invalid.");
@@ -181,30 +202,11 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
         List<StrijpLight> parsedLights = new ArrayList<>();
         for(JsonNode lightNode : lightsNode) {
             String host = lightNode.get("host").asText();
-            StrijpLight light = new StrijpLight(host);
+            Integer port = lightNode.get("port").asInt();
+            StrijpLight light = new StrijpLight("", host, port);
             parsedLights.add(light);
         }
         return parsedLights;
-    }
-
-    private void syncLightsToMemory(List<StrijpLight> lights) {
-        // Add lights that don't exist yet
-        for (StrijpLight light : lights) {
-            // Continue if light already exists.
-            if (strijpLightMemory.stream().anyMatch(l -> l.getHost().equals(light.getHost()))) continue;
-
-            StrijpLight newLight = new StrijpLight(light.getHost());
-            strijpLightMemory.add(newLight);
-        }
-
-        // Remove a light from memory if not included in new list
-        for (StrijpLight light : new ArrayList<>(strijpLightMemory)) {
-            // Light not found so remove it
-            if (lights.stream().noneMatch(l -> l.getHost().equals(light.getHost()))) {
-                Optional<StrijpLight> foundLight = strijpLightMemory.stream().filter(l -> l.getHost().equals(light.getHost())).findFirst();
-                foundLight.ifPresent(strijpLight -> strijpLightMemory.remove(strijpLight));
-            }
-        }
     }
 
     private AssetTreeNode[] syncLightsToAssets(List<StrijpLight> lights, AssetAttribute protocolConfiguration) {
@@ -215,8 +217,9 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
         //Get the instance of the Strijp agent itself.
         Asset parentAgent = assetsUnderProtocol.stream().filter(a -> a.getWellKnownType() == AssetType.AGENT).findFirst().orElse(null);
         if(parentAgent != null) {
-            for(Asset asset : assetsUnderProtocol)
-            {
+            for(StrijpLight strijpLight : new ArrayList<>(strijpLightMemory)) {
+                Asset asset = assetService.findAsset(strijpLight.getAssetId());
+
                 //TODO CHANGE ASSET TYPE THING TO LIGHT
                 if(asset.getWellKnownType() != AssetType.THING)
                     continue;
@@ -234,28 +237,35 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
                             if(updatedLight != null) {
                                 List<AssetAttribute> strijpLightAttributes = Arrays.asList(
                                         new AssetAttribute("Host", STRING, Values.create(updatedLight.getHost())).setMeta(new Meta(new MetaItem(READ_ONLY, Values.create(true)))),
+                                        new AssetAttribute("Port", INTEGER, Values.create(updatedLight.getPort())).setMeta(new Meta(new MetaItem(READ_ONLY, Values.create(true)))),
+                                        //TODO Set RGBAW from StrijpLight state
                                         new AssetAttribute("RGBAW", STRING, Values.create("[0,0,0,0,0]")).addMeta(
                                                 new MetaItem(AGENT_LINK, new AttributeRef(parentAgent.getId(), agentProtocolConfigName).toArrayValue())
                                         )
                                 );
                                 asset.setAttributes(strijpLightAttributes);
                                 assetService.mergeAsset(asset);
+
+                                StrijpLight lightToUpdate = strijpLightMemory.stream().filter(l -> l.getAssetId().equals(strijpLight.getAssetId())).findFirst().orElse(null);
+                                if (lightToUpdate != null) {
+                                    lightToUpdate.setPort(updatedLight.getPort());
+                                }
                             }
                         }else{
-                            if(lights.stream().noneMatch(l -> l.getHost().equals(lightHost)))
+                            if(lights.stream().noneMatch(l -> l.getHost().equals(lightHost))) {
                                 assetService.deleteAsset(asset.getId());
+                            }
                         }
                     }
                 }
             }
 
-            //New data is fetched based on the changes.
-            assetsUnderProtocol = assetService.findAssets(protocolConfiguration.getAssetId().orElse(null), new AssetQuery());
             for(StrijpLight light : lights)
             {
                 boolean lightAssetExistsAlready = false;
-                for(Asset asset : assetsUnderProtocol)
-                {
+                for(StrijpLight strijpLight : strijpLightMemory) {
+                    Asset asset = assetService.findAsset(strijpLight.getAssetId());
+
                     //TODO CHANGE ASSET TYPE THING TO LIGHT
                     if((asset.getWellKnownType() != AssetType.THING))
                         continue;
@@ -267,8 +277,9 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
                     if(lightHostAttribute != null) {
                         String lightHost = lightHostAttribute.getValueAsString().orElse(null);
                         if(lightHost != null) {
-                            if(lightHost.equals(light.getHost()))
+                            if(lightHost.equals(light.getHost())) {
                                 lightAssetExistsAlready = true;
+                            }
                         }
                     }
 
@@ -291,6 +302,7 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
 
         List<AssetAttribute> strijpLightAttributes = Arrays.asList(
                 new AssetAttribute("Host", STRING, Values.create(light.getHost())).setMeta(new Meta(new MetaItem(READ_ONLY, Values.create(true)))),
+                new AssetAttribute("Port", INTEGER, Values.create(light.getPort())).setMeta(new Meta(new MetaItem(READ_ONLY, Values.create(true)))),
                 new AssetAttribute("RGBAW", STRING, Values.create("[0,0,0,0,0]")).addMeta(
                         new MetaItem(AGENT_LINK, new AttributeRef(parentAgent.getId(), agentProtocolConfigName).toArrayValue())
                 )
