@@ -133,9 +133,6 @@ public class StrijpProtocol extends AbstractProtocol implements ProtocolLinkedAt
 
     @Override
     protected void processLinkedAttributeWrite(AttributeEvent event, Value processedValue, AssetAttribute protocolConfiguration) {
-        for (StrijpLight light : strijpLightMemory) {
-            LOG.info("LIGHT - " + light.getAssetId() + " - " + light.getHost() + " - " + light.getPort());
-        }
         try {
             DatagramSocket ds = new DatagramSocket();
             InetAddress ip = InetAddress.getByName(host);
