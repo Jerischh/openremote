@@ -4,11 +4,21 @@ public class StrijpLight {
     private String assetId;
     private String host;
     private Integer port;
+    private double x;
+    private double y;
 
-    public StrijpLight(String assetId, String host, Integer port) {
+    StrijpLight(String assetId, String host, Integer port) {
         this.assetId = assetId;
         this.host = host;
         this.port = port;
+    }
+
+    StrijpLight(String assetId, String host, Integer port, double x, double y) {
+        this.assetId = assetId;
+        this.host = host;
+        this.port = port;
+        this.x = x;
+        this.y = y;
     }
 
     public String getAssetId() {
@@ -33,5 +43,21 @@ public class StrijpLight {
 
     public void setPort(Integer port) {
         this.port = port;
+    }
+
+    public double getX() {
+        return x;
+    }
+
+    public void setX(double x) {
+        this.x = x;
+    }
+
+    public double getY() {
+        return y;
+    }
+
+    public void setY(double y) {
+        this.y = y;
     }
 }
