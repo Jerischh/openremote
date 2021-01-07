@@ -1,10 +1,7 @@
 apply plugin: "java"
 apply plugin: "groovy"
 
-dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
-    
+dependencies {    
     compile resolveProject(":container")
 
     compile("io.netty:netty-transport-rxtx:$nettyVersion") {
@@ -40,8 +37,4 @@ dependencies {
 
 jar {
     archivesBaseName = "openremote-${project.name}"
-}
-
-test {
-    useJUnitPlatform()
 }
