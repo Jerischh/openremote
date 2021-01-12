@@ -16,9 +16,7 @@ import static org.openremote.model.attribute.MetaItemDescriptorImpl.metaItemInte
 public abstract class AbstractStrijpProtocol<T> extends AbstractIoClientProtocol<T, UdpIoClient<T>> {
     public static final String PROTOCOL_NAME = PROTOCOL_NAMESPACE + ":abstractStrijpClient";
 
-    /**
-     * Optionally sets the port that this UDP client will bind to (if not set then a random ephemeral port will be used)
-     */
+
     public static final MetaItemDescriptor META_PROTOCOL_BIND_PORT = metaItemInteger(
             PROTOCOL_NAME + ":bindPort",
             ACCESS_PRIVATE,
