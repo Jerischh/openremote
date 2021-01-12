@@ -1,5 +1,6 @@
 package org.openremote.agent.protocol.strijp;
 
+
 import org.openremote.agent.protocol.io.AbstractIoClientProtocol;
 import org.openremote.agent.protocol.udp.UdpIoClient;
 import org.openremote.model.asset.AssetAttribute;
