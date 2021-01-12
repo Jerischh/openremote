@@ -46,8 +46,9 @@ test {
         // Enable this to show STDOUT/STDERR on console when running tests
         // showStandardStreams = true
     }
-    reports {
-        xml.enabled = true
-        html.enabled = true
-    }
+}
+
+reports {
+    xml.enabled = true
+    html.enabled = true
 }
