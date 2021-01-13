@@ -1,15 +1,20 @@
-import org.junit.Test;
-import static org.junit.Assert.*;
+// import org.testng.Assert;
+// import org.testng.annotations.Test;
+// import org.junit.Test;
 
-public class MyUnitTest {
-
-    @Test
-    public void testConcatenate() {
-        MyUnit myUnit = new MyUnit();
-
-        String result = "one" + "two";
-
-        assertEquals("onetwo", result);
-
-    }
+class SampleTest {
+   // @jacocoTestReport
+   // public void testMethodOne() {
+   //    Assert.assertTrue(true);
+   // }
+	  
+   // @Test
+   // public void testMethodTwo() {
+   //    Assert.assertTrue(false);
+   // }
+	  
+   // @Test(dependsOnMethods = {"testMethodTwo"})
+   // public void testMethodThree() {
+   //    Assert.assertTrue(true);
+   // }
 }

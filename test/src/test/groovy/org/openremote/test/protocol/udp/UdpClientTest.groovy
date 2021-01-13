@@ -41,134 +41,134 @@ import java.util.function.Consumer
  */
 class UdpClientTest extends Specification implements ManagerContainerTrait {
 
-    def "Check client"() {
+    // def "Check client"() {
 
-        given: "expected conditions"
-        def conditions = new PollingConditions(timeout: 10, delay: 0.2)
+    //     given: "expected conditions"
+    //     def conditions = new PollingConditions(timeout: 10, delay: 0.2)
 
-        and: "the container is started"
-        def clientPort = findEphemeralPort()
-        def container = startContainer(defaultConfig(), Collections.singletonList(new ManagerExecutorService()))
-        def protocolExecutorService = container.getService(ProtocolExecutorService.class)
+    //     and: "the container is started"
+    //     def clientPort = findEphemeralPort()
+    //     def container = startContainer(defaultConfig(), Collections.singletonList(new ManagerExecutorService()))
+    //     def protocolExecutorService = container.getService(ProtocolExecutorService.class)
 
-        and: "a simple UDP echo server"
-        def echoServerPort = findEphemeralPort()
-        def echoServer = new UdpStringServer(protocolExecutorService, new InetSocketAddress("127.0.0.1", echoServerPort), ";", Integer.MAX_VALUE, true)
-        echoServer.addMessageConsumer({
-            message, channel, sender ->
-                echoServer.sendMessage(message, sender)
-        })
+    //     and: "a simple UDP echo server"
+    //     def echoServerPort = findEphemeralPort()
+    //     def echoServer = new UdpStringServer(protocolExecutorService, new InetSocketAddress("127.0.0.1", echoServerPort), ";", Integer.MAX_VALUE, true)
+    //     echoServer.addMessageConsumer({
+    //         message, channel, sender ->
+    //             echoServer.sendMessage(message, sender)
+    //     })
 
-        and: "we add callback consumers on the server"
-        def serverConnectionStatus = echoServer.connectionStatus
-        echoServer.addConnectionStatusConsumer((Consumer<ConnectionStatus>) {
-            status -> serverConnectionStatus = status
-        })
+    //     and: "we add callback consumers on the server"
+    //     def serverConnectionStatus = echoServer.connectionStatus
+    //     echoServer.addConnectionStatusConsumer((Consumer<ConnectionStatus>) {
+    //         status -> serverConnectionStatus = status
+    //     })
         
-        and: "a simple UDP broadcast client"
-        UdpIoClient<String> client = new UdpIoClient<String>(
-                "127.0.0.1",
-                echoServerPort,
-                clientPort,
-                protocolExecutorService)
-        client.setEncoderDecoderProvider({
-            [
-                new StringEncoder(CharsetUtil.UTF_8),
-                new StringDecoder(CharsetUtil.UTF_8),
-                new AbstractNettyIoClient.MessageToMessageDecoder<String>(String.class, client)
-            ].toArray(new ChannelHandler[0])
-        })
+    //     and: "a simple UDP broadcast client"
+    //     UdpIoClient<String> client = new UdpIoClient<String>(
+    //             "127.0.0.1",
+    //             echoServerPort,
+    //             clientPort,
+    //             protocolExecutorService)
+    //     client.setEncoderDecoderProvider({
+    //         [
+    //             new StringEncoder(CharsetUtil.UTF_8),
+    //             new StringDecoder(CharsetUtil.UTF_8),
+    //             new AbstractNettyIoClient.MessageToMessageDecoder<String>(String.class, client)
+    //         ].toArray(new ChannelHandler[0])
+    //     })
 
-        and: "we add callback consumers to the client"
-        def connectionStatus = client.getConnectionStatus()
-        String lastMessage
-        client.addMessageConsumer({
-            message ->
-                lastMessage = message
-        })
-        client.addConnectionStatusConsumer({
-            status -> connectionStatus = status
-        })
+    //     and: "we add callback consumers to the client"
+    //     def connectionStatus = client.getConnectionStatus()
+    //     String lastMessage
+    //     client.addMessageConsumer({
+    //         message ->
+    //             lastMessage = message
+    //     })
+    //     client.addConnectionStatusConsumer({
+    //         status -> connectionStatus = status
+    //     })
 
-        when: "the server is started"
-        echoServer.start()
+    //     when: "the server is started"
+    //     echoServer.start()
 
-        then: "the server should be running"
-        conditions.eventually {
-            assert echoServer.connectionStatus == ConnectionStatus.CONNECTED
-            assert serverConnectionStatus == ConnectionStatus.CONNECTED
-        }
+    //     then: "the server should be running"
+    //     conditions.eventually {
+    //         assert echoServer.connectionStatus == ConnectionStatus.CONNECTED
+    //         assert serverConnectionStatus == ConnectionStatus.CONNECTED
+    //     }
 
-        when: "we call connect on the client"
-        client.connect()
+    //     when: "we call connect on the client"
+    //     client.connect()
 
-        then: "the client status should become CONNECTED"
-        conditions.eventually {
-            assert client.connectionStatus == ConnectionStatus.CONNECTED
-            assert connectionStatus == ConnectionStatus.CONNECTED
-        }
+    //     then: "the client status should become CONNECTED"
+    //     conditions.eventually {
+    //         assert client.connectionStatus == ConnectionStatus.CONNECTED
+    //         assert connectionStatus == ConnectionStatus.CONNECTED
+    //     }
 
-        when: "the server sends a broadcast message"
-        echoServer.sendMessage("Hello world", SocketUtils.socketAddress("255.255.255.255", clientPort))
+    //     when: "the server sends a broadcast message"
+    //     echoServer.sendMessage("Hello world", SocketUtils.socketAddress("255.255.255.255", clientPort))
 
-        then: "we should receive the message"
-        conditions.eventually {
-            assert lastMessage == "Hello world"
-        }
+    //     then: "we should receive the message"
+    //     conditions.eventually {
+    //         assert lastMessage == "Hello world"
+    //     }
 
-        when: "we send a message to the server"
-        client.sendMessage("Test;")
+    //     when: "we send a message to the server"
+    //     client.sendMessage("Test;")
 
-        then: "we should get the same message back"
-        conditions.eventually {
-            assert lastMessage == "Test"
-        }
+    //     then: "we should get the same message back"
+    //     conditions.eventually {
+    //         assert lastMessage == "Test"
+    //     }
 
-        when: "we request the client to disconnect"
-        client.disconnect()
+    //     when: "we request the client to disconnect"
+    //     client.disconnect()
 
-        then: "the client should become DISCONNECTED"
-        conditions.eventually {
-            assert client.connectionStatus == ConnectionStatus.DISCONNECTED
-            assert connectionStatus == ConnectionStatus.DISCONNECTED
-        }
+    //     then: "the client should become DISCONNECTED"
+    //     conditions.eventually {
+    //         assert client.connectionStatus == ConnectionStatus.DISCONNECTED
+    //         assert connectionStatus == ConnectionStatus.DISCONNECTED
+    //     }
 
-        when: "we reconnect the same client"
-        client.connect()
+    //     when: "we reconnect the same client"
+    //     client.connect()
 
-        then: "the client status should become CONNECTED"
-        conditions.eventually {
-            assert client.connectionStatus == ConnectionStatus.CONNECTED
-            assert connectionStatus == ConnectionStatus.CONNECTED
-        }
+    //     then: "the client status should become CONNECTED"
+    //     conditions.eventually {
+    //         assert client.connectionStatus == ConnectionStatus.CONNECTED
+    //         assert connectionStatus == ConnectionStatus.CONNECTED
+    //     }
 
-        when: "the server sends a message to the loopback interface"
-        echoServer.sendMessage("Is there anyone there?", SocketUtils.socketAddress("127.0.0.1", clientPort))
+    //     when: "the server sends a message to the loopback interface"
+    //     echoServer.sendMessage("Is there anyone there?", SocketUtils.socketAddress("127.0.0.1", clientPort))
 
-        then: "we should receive the message"
-        conditions.eventually {
-            assert lastMessage == "Is there anyone there?"
-        }
+    //     then: "we should receive the message"
+    //     conditions.eventually {
+    //         assert lastMessage == "Is there anyone there?"
+    //     }
 
-        when: "we send a message to the server"
-        client.sendMessage("Yes there is!;")
+    //     when: "we send a message to the server"
+    //     client.sendMessage("Yes there is!;")
 
-        then: "we should get the same message back"
-        conditions.eventually {
-            assert lastMessage == "Yes there is!"
-        }
+    //     then: "we should get the same message back"
+    //     conditions.eventually {
+    //         assert lastMessage == "Yes there is!"
+    //     }
 
-        when: "we request the processor to disconnect"
-        client.disconnect()
+    //     when: "we request the processor to disconnect"
+    //     client.disconnect()
 
-        then: "the client should become DISCONNECTED"
-        conditions.eventually {
-            assert client.connectionStatus == ConnectionStatus.DISCONNECTED
-            assert connectionStatus == ConnectionStatus.DISCONNECTED
-        }
+    //     then: "the client should become DISCONNECTED"
+    //     conditions.eventually {
+    //         assert client.connectionStatus == ConnectionStatus.DISCONNECTED
+    //         assert connectionStatus == ConnectionStatus.DISCONNECTED
+    //     }
 
-        cleanup: "the server should be stopped"
-        client.disconnect()
-        echoServer.stop()
-    }
+    //     cleanup: "the server should be stopped"
+    //     client.disconnect()
+    //     echoServer.stop()
+    // }
 }
