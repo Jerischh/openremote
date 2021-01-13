@@ -19,5 +19,5 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           verbose: true # optional (default = false)
-          files: ./test/build/test-results/test/*.xml
+          file: /**/test/build/test-results/test/TEST-org.openremote.test.assets.MyTestCase.xml
           name: codecov-OpenRemoteTechboys
