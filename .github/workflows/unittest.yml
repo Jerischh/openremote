@@ -21,4 +21,3 @@ jobs:
           verbose: true # optional (default = false)
           files: ./test/build/test-results/test/*.xml
           name: codecov-OpenRemoteTechboys
-
