@@ -47,7 +47,7 @@ test {
         // showStandardStreams = true
     }
 
-    // reports {
-    //     junitXml.enabled = true
-    // }
+    reports {
+        junitXml.enabled = true
+    }
 }
